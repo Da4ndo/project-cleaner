@@ -123,6 +123,31 @@ impl File {
             }
         }
 
+        // Check if the parent directory of the destination path exists
+        if let Some(parent_path) = current_dest_path.parent() {
+            if !parent_path.exists() {
+                // If it doesn't exist, create it
+                match tokio::fs::create_dir_all(&parent_path).await {
+                    Ok(_) => {
+                        if self.env == "development" {
+                            println!(
+                                "└──{} Successfully created destination directory.",
+                                "[SYSTEM-DEBUG]".green()
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "└──{} Failed to create destination directory: {}",
+                            "[SYSTEM-DEBUG]".red(),
+                            e
+                        );
+                        return Err(Box::new(e));
+                    }
+                }
+            }
+        }
+
         // Use fs::copy instead of fs_extra::dir::copy
         match tokio::fs::copy(current_path, current_dest_path).await {
             Ok(_) => {
