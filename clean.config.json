@@ -6,5 +6,5 @@
   "exception_files": ["README\\.md$", "LICENSE$"],
   "exception_dirs": ["\/.git$", "\/.vscode$", "project-cleaner$", "test$"],
 
-  "env": "development"
+  "env": "production"
 }
