@@ -1,7 +1,7 @@
-![Forks](https://img.shields.io/github/forks/Da4ndo/projectcleaner?label=Forks&color=lime&logo=githubactions&logoColor=lime)
-![Stars](https://img.shields.io/github/stars/Da4ndo/projectcleaner?label=Stars&color=yellow&logo=reverbnation&logoColor=yellow)
-![License](https://img.shields.io/github/license/Da4ndo/projectcleaner?label=License&color=808080&logo=gitbook&logoColor=808080)
-![Issues](https://img.shields.io/github/issues/Da4ndo/projectcleaner?label=Issues&color=red&logo=ifixit&logoColor=red)
+![Forks](https://img.shields.io/github/forks/Da4ndo/project-cleaner?label=Forks&color=lime&logo=githubactions&logoColor=lime)
+![Stars](https://img.shields.io/github/stars/Da4ndo/project-cleaner?label=Stars&color=yellow&logo=reverbnation&logoColor=yellow)
+![License](https://img.shields.io/github/license/Da4ndo/project-cleaner?label=License&color=808080&logo=gitbook&logoColor=808080)
+![Issues](https://img.shields.io/github/issues/Da4ndo/project-cleaner?label=Issues&color=red&logo=ifixit&logoColor=red)
 
 # ProjectCleaner
 
