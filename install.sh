@@ -35,7 +35,7 @@ pre_setup() {
         if [ -f ~/.bashrc ]; then
             echo -ne "\033[0;35mAdding\033[0m '. "\$HOME/.da4ndo/env"' to ~/.bashrc...\033[0m\r"
 
-            echo '. "$HOME/.da4ndo/env"' >>~/.bashrc
+            echo -e '\n. "$HOME/.da4ndo/env"' >> ~/.bashrc
 
             echo -e "\033[0;32mAdded\033[0m '. "\$HOME/.da4ndo/env"' to ~/.bashrc.     \033[0m"
         fi
@@ -43,7 +43,7 @@ pre_setup() {
         if [ -f ~/.zshrc ]; then
             echo -ne "\033[0;35mAdding\033[0m '. "\$HOME/.da4ndo/env"' to ~/.zshrc...\033[0m\r"
 
-            echo '. "$HOME/.da4ndo/env"' >>~/.zshrc
+            echo -e '\n. "$HOME/.da4ndo/env"' >>~/.zshrc
 
             echo -e "\033[0;32mAdded\033[0m '. "\$HOME/.da4ndo/env" to ~/.zshrc.        \033[0m"
         fi
