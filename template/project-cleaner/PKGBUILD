@@ -1,0 +1,21 @@
+# Maintainer: Da4ndo <contact@da4ndo.com>
+
+# This PKGBUILD is not a full PKGBUILD
+# pkgver, source, and sha256sums are to be generated
+
+pkgname=project-cleaner
+pkgver=0.1.0
+pkgrel=1
+arch=(x86_64)
+license=(MIT)
+url="https://github.com/Da4ndo/project-cleaner"
+source=("https://github.com/Da4ndo/project-cleaner/releases/download/v${pkgver}/project-cleaner-v${pkgver}-x86_64-linux.tar.gz")
+sha256sums=('SKIP')  # Replace SKIP with actual checksum when available
+
+package() {
+  cd "project-cleaner-v${pkgver}-x86_64-linux"
+  install -Dm755 "project-cleaner" "$pkgdir/usr/bin/project-cleaner"
+
+  # Install clean.config.json file to /etc/project-cleaner/
+  install -Dm644 clean.config.json "$pkgdir/etc/project-cleaner/clean.config.json"
+}

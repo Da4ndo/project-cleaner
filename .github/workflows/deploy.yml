@@ -1,0 +1,84 @@
+name: Deploy to AUR and GitHub Release
+
+on:
+  release:
+    types: [created]
+
+env:
+  CARGO_TERM_COLOR: always
+  PKG_NAME: project-cleaner
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+    - name: Build
+      run: cargo build --release
+    - name: Get version
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    - name: Create Release Archive
+      run: |
+        RELEASE_DIR="${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux"
+        mkdir $RELEASE_DIR
+        cp target/release/${{ env.PKG_NAME }} $RELEASE_DIR/
+        cp clean.config.json $RELEASE_DIR/
+        tar -czvf $RELEASE_DIR.tar.gz $RELEASE_DIR
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux.tar.gz
+        asset_name: ${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux.tar.gz
+        asset_content_type: application/gzip
+
+  deploy_aur:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Update PKGBUILD
+      run: |
+        version="${GITHUB_REF#refs/tags/}"
+        echo "Updating PKGBUILD to version $version"
+        
+        # Update version in PKGBUILD
+        sed -i "s/pkgver=.*/pkgver=${version#v}/" template/${{ env.PKG_NAME }}/PKGBUILD
+        
+        # Construct download URL
+        download_url="https://github.com/${{ github.repository }}/releases/download/$version/${{ env.PKG_NAME }}-$version-x86_64-linux.tar.gz"
+        echo "Download URL: $download_url"
+        
+        # Update source in PKGBUILD
+        sed -i "s|source=.*|source=(\"$download_url\")|" template/${{ env.PKG_NAME }}/PKGBUILD
+        
+        # Calculate SHA256 sum
+        echo "Downloading asset for SHA256 calculation"
+        sha256sum=$(curl -sL "$download_url" | sha256sum | cut -d ' ' -f 1)
+        echo "SHA256: $sha256sum"
+        
+        # Update SHA256 sum in PKGBUILD
+        sed -i "s/sha256sums=.*/sha256sums=('$sha256sum')/" template/${{ env.PKG_NAME }}/PKGBUILD
+
+        echo "Content of PKGBUILD:"
+        cat template/${{ env.PKG_NAME }}/PKGBUILD
+        echo "::debug::This is the content of the PKGBUILD file after updates"
+
+    - name: Publish AUR package
+      uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+      with:
+        pkgname: ${{ env.PKG_NAME }}
+        pkgbuild: ./template/${{ env.PKG_NAME }}/PKGBUILD
+        commit_username: ${{ secrets.AUR_USERNAME }}
+        commit_email: ${{ secrets.AUR_EMAIL }}
+        ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        commit_message: "Update to version ${GITHUB_REF#refs/tags/}"
+        ssh_keyscan_types: rsa,ecdsa,ed25519

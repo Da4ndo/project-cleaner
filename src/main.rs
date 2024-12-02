@@ -1,80 +1,110 @@
 use serde::Deserialize;
-use std::path::Path;
-use tokio::fs::File;
 use tokio::io::AsyncReadExt;
+use std::path::PathBuf;
+use colored::*;
+use clap::{Command, Arg};
+use std::env;
 
 mod cleaner;
+mod restore;
 
 #[derive(Deserialize, Clone)]
-#[allow(dead_code)]
 pub struct Config {
     dir: String,
-    backup_dir: String,
+    backup: BackupConfig,
     file_patterns: Vec<String>,
     dir_patterns: Vec<String>,
     exception_files: Vec<String>,
     exception_dirs: Vec<String>,
-    env: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct BackupConfig {
+    enabled: bool,
+    dir: String,
+    versioning: bool,
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Command::new("project-cleaner")
+        .version(env!("CARGO_PKG_VERSION"))
+        .author("Da4ndo <contact@da4ndo.com>")
+        .about("A tool to clean up project directories with configurable patterns and backup options")
+        .arg(Arg::new("restore")
+            .short('r')
+            .long("restore")
+            .action(clap::ArgAction::SetTrue)
+            .help("Restore files from backup"));
+
+    let matches = app.get_matches();
+
     // Load configuration
-    let mut file = match File::open("clean.config.json").await {
-        Ok(file) => file,
-        Err(e) => {
-            eprintln!("Failed to open config file: {}", e);
-            return;
+    let config = load_config().await?;
+
+    if matches.get_flag("restore") {
+        println!("{}", "Starting restore process...".bright_cyan());
+        let restorer = restore::Restorer::new(config);
+        restorer.restore().await?;
+        println!("{}", "Restore process completed successfully.".bright_green());
+    } else {
+        // Print configuration
+        println!("{}", "📝 Configuration:".bright_blue().bold());
+        println!("  {} {}: {}", "→".bright_black(), "Project directory".yellow(), config.dir.yellow());
+        println!("  {} {}", "→".bright_black(), "Backup settings:".bright_blue());
+        println!("    - {}: {}", "Enabled".bright_blue(), config.backup.enabled.to_string().bright_white());
+        println!("    - {}: {}", "Directory".bright_blue(), config.backup.dir.bright_white());
+        println!("    - {}: {}", "Versioning".bright_blue(), config.backup.versioning.to_string().bright_white());
+        
+        println!("\n  {} {}", "→".bright_black(), "File patterns to clean:".bright_blue());
+        for pattern in &config.file_patterns {
+            println!("    - {}", pattern.bright_white());
         }
+        
+        println!("\n  {} {}", "→".bright_black(), "Directory patterns to clean:".bright_blue());
+        for pattern in &config.dir_patterns {
+            println!("    - {}", pattern.bright_white());
+        }
+        
+        println!("\n  {} {}", "→".bright_black(), "Exception files:".bright_blue());
+        for pattern in &config.exception_files {
+            println!("    - {}", pattern.bright_white());
+        }
+        
+        println!("\n  {} {}", "→".bright_black(), "Exception directories:".bright_blue());
+        for pattern in &config.exception_dirs {
+            println!("    - {}", pattern.bright_white());
+        }
+
+        println!("\n{}", "Starting cleanup process...".bright_cyan());
+        // Create and run processor
+        let processor = cleaner::processor::Processor::new(config);
+        processor.process().await?;
+
+        println!("{}", "Cleanup process completed successfully.".bright_green());
+    }
+
+    Ok(())
+}
+
+//TODO Implement .conf rather .json
+async fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
+    let config_path = if cfg!(debug_assertions) {
+        // Debug mode - look in current directory
+        PathBuf::from("clean.config.json")
+    } else {
+        // Release mode - look in /etc/project-cleaner/
+        PathBuf::from("/etc/project-cleaner/clean.config.json")
     };
 
+    println!("\n{}", "📁 Loading configuration:".bright_blue().bold());
+    println!("  {} Path: {}", "→".bright_black(), config_path.display().to_string().bright_white());
+
+    let mut file = tokio::fs::File::open(&config_path).await
+        .map_err(|e| format!("Failed to open config file at {}: {}", config_path.display(), e))?;
+    
     let mut contents = String::new();
-    match file.read_to_string(&mut contents).await {
-        Ok(_) => {}
-        Err(e) => {
-            eprintln!("Failed to read config file: {}", e);
-            return;
-        }
-    };
-
-    let config: Config = match serde_json::from_str(&contents) {
-        Ok(config) => config,
-        Err(e) => {
-            eprintln!("Failed to parse config file: {}", e);
-            return;
-        }
-    };
-
-    let backup_dir = Path::new(&config.backup_dir);
-
-    // Create backup directory if it doesn't exist
-    match tokio::fs::create_dir_all(&backup_dir).await {
-        Ok(_) => {}
-        Err(e) => {
-            eprintln!("Failed to create backup directory: {}", e);
-            return;
-        }
-    };
-
-    println!("Starting folder cleaning process...");
-    let folder_cleaner = cleaner::folder::Folder::new(config.clone());
-    match folder_cleaner.clean().await {
-        Ok(_) => {
-            println!("Folder cleaning completed successfully.");
-        }
-        Err(e) => {
-            eprintln!("Failed to clean folders: {}", e);
-        }
-    }
-
-    println!("Starting file cleaning process...");
-    let file_cleaner = cleaner::file::File::new(config.clone());
-    match file_cleaner.clean().await {
-        Ok(_) => {
-            println!("File cleaning completed successfully.");
-        }
-        Err(e) => {
-            eprintln!("Failed to clean files: {}", e);
-        }
-    }
+    file.read_to_string(&mut contents).await?;
+    
+    Ok(serde_json::from_str(&contents)?)
 }

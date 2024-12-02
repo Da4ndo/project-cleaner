@@ -1,10 +1,13 @@
 {
-  "dir": "/home/da4ndo/projects",
-  "backup_dir": "/home/da4ndo/tmp/projects_backup",
+  "dir": "/projects",
   "file_patterns": ["\\.pyc$", "\\.o$", "\\.a$"],
   "dir_patterns": ["target$", "node_modules$", "build$", "dist$"],
   "exception_files": ["README\\.md$", "LICENSE$"],
-  "exception_dirs": ["\/.git$", "\/.vscode$", "project-cleaner$", "test$"],
+  "exception_dirs": ["project-cleaner$", "\\.git$", "\\.vscode$", "test$"],
 
-  "env": "production"
+  "backup": {
+    "enabled": true,
+    "dir": "~/.backup",
+    "versioning": false
+  }
 }
