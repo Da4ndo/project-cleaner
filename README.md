@@ -19,7 +19,6 @@
   <a href="#-features">Features</a> •
   <a href="#%EF%B8%8F-getting-started">Getting Started</a> •
   <a href="#-documentation">Documentation</a> •
-  <a href="#-license">License</a> •
   <a href="#-contributing">Contributing</a>
 </p>
 
