@@ -68,13 +68,15 @@ jobs:
     - name: Get README Content
       id: get_readme
       run: |
-        # Read README and escape any shell commands and special characters
-        README_CONTENT=$(cat README.md | sed 's/```bash/```/g' | sed 's/```shell/```/g')
-        # Use a delimiter that's unlikely to appear in the content
-        delimiter="EOF_CUSTOM_$(date +%s)"
-        echo "README_CONTENT<<$delimiter" >> $GITHUB_OUTPUT
-        echo "$README_CONTENT" >> $GITHUB_OUTPUT
-        echo "$delimiter" >> $GITHUB_OUTPUT
+        # Read README content and escape it properly
+        README_CONTENT=$(cat README.md)
+        # Use a custom delimiter that won't appear in the content
+        delimiter="README_EOF_$(date +%s)"
+        {
+          echo "README_CONTENT<<$delimiter"
+          echo "$README_CONTENT"
+          echo "$delimiter"
+        } >> $GITHUB_OUTPUT
 
     - name: Create Release
       if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'true'
@@ -96,19 +98,19 @@ jobs:
           "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.get_version.outputs.VERSION }}" \
           | jq -r .id)
         
-        # Create a temporary file with the README content
-        README_CONTENT="${{ steps.get_readme.outputs.README_CONTENT }}"
-        echo "$README_CONTENT" > release_body.md
+        # Create JSON payload with proper escaping
+        jq -n \
+          --arg name "ProjectCleaner - ${{ steps.get_version.outputs.VERSION }}" \
+          --arg body "${{ steps.get_readme.outputs.README_CONTENT }}" \
+          '{name: $name, body: $body}' > release_payload.json
         
-        # Update both name and body of the release using the file
+        # Update release using the JSON payload file
         curl -X PATCH \
           -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -H "Accept: application/vnd.github.v3+json" \
+          -H "Content-Type: application/json" \
           "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" \
-          -d "{
-            \"name\": \"ProjectCleaner - ${{ steps.get_version.outputs.VERSION }}\",
-            \"body\": $(jq -R -s '.' < release_body.md)
-          }"
+          --data @release_payload.json
 
     - name: Delete Existing Asset
       if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'false'
