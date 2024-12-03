@@ -27,7 +27,7 @@ jobs:
     outputs:
       version: ${{ steps.get_version.outputs.VERSION }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         
@@ -63,7 +63,6 @@ jobs:
         mkdir $RELEASE_DIR
         cp target/release/${{ inputs.pkg_name }} $RELEASE_DIR/
         
-        # Copy additional files if specified
         if [ -n "${{ inputs.additional_files }}" ]; then
           IFS=',' read -ra FILES <<< "${{ inputs.additional_files }}"
           for file in "${FILES[@]}"; do
@@ -87,8 +86,7 @@ jobs:
         } >> $GITHUB_OUTPUT
 
     - name: Create or Update Release
-      id: release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.get_version.outputs.VERSION }}
         name: "${{ inputs.pkg_name }} - ${{ steps.get_version.outputs.VERSION }}"
