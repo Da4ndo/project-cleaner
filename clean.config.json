@@ -1,9 +1,13 @@
 {
   "dir": "/projects",
-  "file_patterns": ["\\.pyc$", "\\.o$", "\\.a$"],
-  "dir_patterns": ["target$", "node_modules$", "build$", "dist$"],
-  "exception_files": ["README\\.md$", "LICENSE$"],
-  "exception_dirs": ["project-cleaner$", "\\.git$", "\\.vscode$", "test$"],
+  "target": {
+    "files_patterns": ["\\.pyc$", "\\.o$", "\\.a$"],
+    "dirs_patterns": ["target$", "node_modules$", "build$", "dist$"]
+  },
+  "exclude": {
+    "files_patterns": ["README\\.md$", "LICENSE$"],
+    "dirs_patterns": ["project-cleaner$", "\\.git$", "\\.vscode$", "test$"]
+  },
 
   "backup": {
     "enabled": true,

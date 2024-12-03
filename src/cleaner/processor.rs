@@ -44,7 +44,7 @@ macro_rules! create_regex {
     ($patterns:expr) => {
         $patterns
             .iter()
-            .map(|p| Regex::new(&p).unwrap())
+            .map(|p| Regex::new(p.as_str()).unwrap())
             .collect::<Vec<Regex>>()
     };
 }
@@ -102,10 +102,10 @@ impl Processor {
         let total_size = Arc::new(AtomicUsize::new(0));
 
         // Compile patterns once
-        let file_patterns = Arc::new(create_regex!(&self.config.file_patterns));
-        let dir_patterns = Arc::new(create_regex!(&self.config.dir_patterns));
-        let exception_files = Arc::new(create_regex!(&self.config.exception_files));
-        let exception_dirs = Arc::new(create_regex!(&self.config.exception_dirs));
+        let file_patterns = Arc::new(create_regex!(&self.config.target.files_patterns));
+        let dir_patterns = Arc::new(create_regex!(&self.config.target.dirs_patterns));
+        let exception_files = Arc::new(create_regex!(&self.config.exclude.files_patterns));
+        let exception_dirs = Arc::new(create_regex!(&self.config.exclude.dirs_patterns));
 
         let mut root_entries = Vec::new();
         let mut dir_reader = tokio::fs::read_dir(&source_dir).await?;

@@ -78,6 +78,48 @@ mkdir -p /etc/project-cleaner
 cp clean.config.json /etc/project-cleaner/clean.config.json
 ```
 
+### ⚙️ Configuration
+
+The default configuration file is located at `/etc/project-cleaner/clean.config.json`. You can customize the cleaning patterns and behavior by editing this file:
+
+```bash
+sudo nano /etc/project-cleaner/clean.config.json
+```
+
+Example configuration:
+```json
+{
+  "dir": "/projects",
+  "target": {
+    "files_patterns": ["\\.pyc$", "\\.o$", "\\.a$"],
+    "dirs_patterns": ["target$", "node_modules$", "build$", "dist$"]
+  },
+  "exclude": {
+    "files_patterns": ["README\\.md$", "LICENSE$"],
+    "dirs_patterns": ["project-cleaner$", "\\.git$", "\\.vscode$", "test$"]
+  },
+
+  "backup": {
+    "enabled": true,
+    "dir": "~/.backup",
+    "versioning": false
+  }
+}
+```
+
+#### Configuration Options:
+- **dir**: The root directory to scan for cleanup
+- **target**: Define patterns for files/directories to clean
+  - `files_patterns`: Regex patterns for files to clean (e.g. ".pyc$", ".o$")
+  - `dirs_patterns`: Regex patterns for directories to clean (e.g. "target$", "node_modules$")
+- **exclude**: Define patterns for files/directories to protect
+  - `files_patterns`: Regex patterns for files to exclude (e.g. "README.md$")
+  - `dirs_patterns`: Regex patterns for directories to exclude (e.g. ".git$")
+- **backup**: Backup settings
+  - `enabled`: Enable/disable backup functionality (true/false)
+  - `dir`: Directory path for storing backups (e.g. "~/.backup")
+  - `versioning`: Enable/disable versioned backups (true/false)
+
 ## 📖 Documentation
 
 Project Cleaner is a high-performance tool designed for efficient project cleanup. Key features include:

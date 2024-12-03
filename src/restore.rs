@@ -58,8 +58,8 @@ impl Restorer {
         let base_dir = PathBuf::from(&self.config.dir);
         
         // Create regex patterns from config
-        let file_patterns = create_regex!(&self.config.file_patterns);
-        let dir_patterns = create_regex!(&self.config.dir_patterns);
+        let file_patterns = create_regex!(&self.config.target.files_patterns);
+        let dir_patterns = create_regex!(&self.config.target.dirs_patterns);
         let mut processed_dirs = std::collections::HashSet::new();
 
         for entry in WalkDir::new(version_dir) {

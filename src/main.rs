@@ -11,11 +11,15 @@ mod restore;
 #[derive(Deserialize, Clone)]
 pub struct Config {
     dir: String,
+    target: Patterns,
+    exclude: Patterns,
     backup: BackupConfig,
-    file_patterns: Vec<String>,
-    dir_patterns: Vec<String>,
-    exception_files: Vec<String>,
-    exception_dirs: Vec<String>,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct Patterns {
+    files_patterns: Vec<String>,
+    dirs_patterns: Vec<String>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -57,22 +61,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("    - {}: {}", "Versioning".bright_blue(), config.backup.versioning.to_string().bright_white());
         
         println!("\n  {} {}", "→".bright_black(), "File patterns to clean:".bright_blue());
-        for pattern in &config.file_patterns {
+        for pattern in &config.target.files_patterns {
             println!("    - {}", pattern.bright_white());
         }
         
         println!("\n  {} {}", "→".bright_black(), "Directory patterns to clean:".bright_blue());
-        for pattern in &config.dir_patterns {
+        for pattern in &config.target.dirs_patterns {
             println!("    - {}", pattern.bright_white());
         }
         
         println!("\n  {} {}", "→".bright_black(), "Exception files:".bright_blue());
-        for pattern in &config.exception_files {
+        for pattern in &config.exclude.files_patterns {
             println!("    - {}", pattern.bright_white());
         }
         
         println!("\n  {} {}", "→".bright_black(), "Exception directories:".bright_blue());
-        for pattern in &config.exception_dirs {
+        for pattern in &config.exclude.dirs_patterns {
             println!("    - {}", pattern.bright_white());
         }
 
