@@ -68,10 +68,13 @@ jobs:
     - name: Get README Content
       id: get_readme
       run: |
-        README_CONTENT=$(cat README.md)
-        echo "README_CONTENT<<EOF" >> $GITHUB_OUTPUT
+        # Read README and escape any shell commands and special characters
+        README_CONTENT=$(cat README.md | sed 's/```bash/```/g' | sed 's/```shell/```/g')
+        # Use a delimiter that's unlikely to appear in the content
+        delimiter="EOF_CUSTOM_$(date +%s)"
+        echo "README_CONTENT<<$delimiter" >> $GITHUB_OUTPUT
         echo "$README_CONTENT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        echo "$delimiter" >> $GITHUB_OUTPUT
 
     - name: Create Release
       if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'true'
@@ -81,7 +84,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ github.event.inputs.version }}
-        release_name: ${{ github.event.inputs.version }}
+        release_name: "ProjectCleaner - ${{ github.event.inputs.version }}"
         body: ${{ steps.get_readme.outputs.README_CONTENT }}
         draft: false
         prerelease: false
@@ -93,11 +96,19 @@ jobs:
           "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.get_version.outputs.VERSION }}" \
           | jq -r .id)
         
+        # Create a temporary file with the README content
+        README_CONTENT="${{ steps.get_readme.outputs.README_CONTENT }}"
+        echo "$README_CONTENT" > release_body.md
+        
+        # Update both name and body of the release using the file
         curl -X PATCH \
           -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -H "Accept: application/vnd.github.v3+json" \
           "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" \
-          -d "{\"body\": $(jq -R -s '.' <<< "${{ steps.get_readme.outputs.README_CONTENT }}")}"
+          -d "{
+            \"name\": \"ProjectCleaner - ${{ steps.get_version.outputs.VERSION }}\",
+            \"body\": $(jq -R -s '.' < release_body.md)
+          }"
 
     - name: Delete Existing Asset
       if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'false'
@@ -118,12 +129,26 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/releases/assets/$ASSET_ID"
         fi
 
+    - name: Get Release URL
+      if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'false'
+      id: get_release_url
+      run: |
+        RELEASE_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.get_version.outputs.VERSION }}" \
+          | jq -r .id)
+        
+        UPLOAD_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" \
+          | jq -r .upload_url)
+        
+        echo "UPLOAD_URL=$UPLOAD_URL" >> $GITHUB_OUTPUT
+
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ github.event.release.upload_url || steps.create_release.outputs.upload_url }}
+        upload_url: ${{ steps.create_release.outputs.upload_url || steps.get_release_url.outputs.UPLOAD_URL }}
         asset_path: ./${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux.tar.gz
         asset_name: ${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux.tar.gz
         asset_content_type: application/gzip
