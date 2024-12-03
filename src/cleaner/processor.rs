@@ -97,7 +97,7 @@ impl Processor {
 
     async fn scan_directory(&self) -> Result<CleanSummary, Box<dyn std::error::Error>> {
         let source_dir = PathBuf::from(&self.config.dir);
-        let backup_dir = PathBuf::from(&self.config.backup.dir);
+        // let backup_dir = PathBuf::from(&self.config.backup.dir);
         let total_items = Arc::new(AtomicUsize::new(0));
         let total_size = Arc::new(AtomicUsize::new(0));
 
@@ -118,7 +118,7 @@ impl Processor {
 
         for chunk in root_entries.chunks(chunk_size) {
             let source_dir = source_dir.clone();
-            let backup_dir = backup_dir.clone();
+            // let backup_dir = backup_dir.clone();
             let file_patterns = Arc::clone(&file_patterns);
             let dir_patterns = Arc::clone(&dir_patterns);
             let exception_files = Arc::clone(&exception_files);
@@ -164,7 +164,7 @@ impl Processor {
 
                                 let target = CleanTarget {
                                     source_path: path.to_path_buf(),
-                                    backup_path: backup_dir.join(relative_path),
+                                    // backup_path: backup_dir.join(relative_path),
                                     is_directory: is_dir,
                                 };
 

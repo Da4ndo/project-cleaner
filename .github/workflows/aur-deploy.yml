@@ -36,18 +36,22 @@ jobs:
     - name: Update PKGBUILD
       id: pkgbuild
       run: |
-        echo "Updating PKGBUILD to version ${{ inputs.version }}-${{ inputs.rel }}"
+        # Strip 'v' prefix from version for pkgver
+        VERSION_NO_V="${{ inputs.version }}"
+        VERSION_NO_V="${VERSION_NO_V#v}"  # Remove 'v' prefix if present
         
-        # Update version and release in PKGBUILD
-        sed -i "s/pkgver=.*/pkgver=${{ inputs.version }}/" ${{ inputs.template_path }}/${{ inputs.pkg_name }}/PKGBUILD
+        echo "Updating PKGBUILD to version $VERSION_NO_V-${{ inputs.rel }}"
+        
+        # Update version (without 'v') and release in PKGBUILD
+        sed -i "s/pkgver=.*/pkgver=$VERSION_NO_V/" ${{ inputs.template_path }}/${{ inputs.pkg_name }}/PKGBUILD
         sed -i "s/pkgrel=.*/pkgrel=${{ inputs.rel }}/" ${{ inputs.template_path }}/${{ inputs.pkg_name }}/PKGBUILD
         
-        # Construct download URL
+        # Construct download URL (with 'v' prefix)
         download_url="https://github.com/${{ github.repository }}/releases/download/${{ inputs.version }}/${{ inputs.pkg_name }}-${{ inputs.version }}-x86_64-linux.tar.gz"
         echo "DOWNLOAD_URL=$download_url" >> $GITHUB_OUTPUT
         echo "📥 Download URL: $download_url"
         
-        # Update source in PKGBUILD
+        # Update source in PKGBUILD (keeping 'v' in URL)
         sed -i "s|source=.*|source=(\"$download_url\")|" ${{ inputs.template_path }}/${{ inputs.pkg_name }}/PKGBUILD
         
         # Calculate SHA256 sum

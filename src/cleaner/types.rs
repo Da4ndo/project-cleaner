@@ -5,7 +5,6 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub struct CleanTarget {
     pub source_path: PathBuf,
-    pub backup_path: PathBuf,
     pub is_directory: bool,
 }
 
