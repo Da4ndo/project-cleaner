@@ -1,201 +1,34 @@
-name: Deploy to AUR and GitHub Release
-
 on:
   release:
     types: [created]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to deploy (e.g. v1.0.0). Leave empty to update existing release'
+        description: 'Version to deploy (e.g. v1.0.0). Leave empty to update latest release'
         required: false
       rel:
         description: 'Release number (e.g. 1)'
         required: true
         default: '1'
 
-env:
-  CARGO_TERM_COLOR: always
-  PKG_NAME: project-cleaner
-
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.get_version.outputs.VERSION }}
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0  # Fetch all history for all tags
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        
-    - name: Build
-      run: cargo build --release
-      
-    - name: Get version
-      id: get_version
-      run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-            echo "CREATE_NEW_RELEASE=true" >> $GITHUB_OUTPUT
-          else
-            # Get the latest release version when only updating rel
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-            if [ -z "$LATEST_TAG" ]; then
-              echo "❌ No tags found in the repository. Cannot update release without a version." >&2
-              exit 1
-            fi
-            echo "VERSION=$LATEST_TAG" >> $GITHUB_OUTPUT
-            echo "CREATE_NEW_RELEASE=false" >> $GITHUB_OUTPUT
-          fi
-        else
-          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          echo "CREATE_NEW_RELEASE=true" >> $GITHUB_OUTPUT
-        fi
-        
-    - name: Build Release Archive
-      run: |
-        RELEASE_DIR="${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux"
-        mkdir $RELEASE_DIR
-        cp target/release/${{ env.PKG_NAME }} $RELEASE_DIR/
-        cp clean.config.json $RELEASE_DIR/
-        tar -czvf $RELEASE_DIR.tar.gz $RELEASE_DIR
-
-    - name: Get README Content
-      id: get_readme
-      run: |
-        # Read README content and escape it properly
-        README_CONTENT=$(cat README.md)
-        # Use a custom delimiter that won't appear in the content
-        delimiter="README_EOF_$(date +%s)"
-        {
-          echo "README_CONTENT<<$delimiter"
-          echo "$README_CONTENT"
-          echo "$delimiter"
-        } >> $GITHUB_OUTPUT
-
-    - name: Create Release
-      if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'true'
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.event.inputs.version }}
-        release_name: "ProjectCleaner - ${{ github.event.inputs.version }}"
-        body: ${{ steps.get_readme.outputs.README_CONTENT }}
-        draft: false
-        prerelease: false
-        
-    - name: Update Existing Release
-      if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'false'
-      run: |
-        RELEASE_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.get_version.outputs.VERSION }}" \
-          | jq -r .id)
-        
-        # Create JSON payload with proper escaping
-        jq -n \
-          --arg name "ProjectCleaner - ${{ steps.get_version.outputs.VERSION }}" \
-          --arg body "${{ steps.get_readme.outputs.README_CONTENT }}" \
-          '{name: $name, body: $body}' > release_payload.json
-        
-        # Update release using the JSON payload file
-        curl -X PATCH \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -H "Accept: application/vnd.github.v3+json" \
-          -H "Content-Type: application/json" \
-          "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" \
-          --data @release_payload.json
-
-    - name: Delete Existing Asset
-      if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'false'
-      run: |
-        RELEASE_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.get_version.outputs.VERSION }}" \
-          | jq -r .id)
-        
-        # Get asset ID
-        ASSET_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets" \
-          | jq -r ".[] | select(.name == \"${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux.tar.gz\").id")
-        
-        if [ ! -z "$ASSET_ID" ]; then
-          # Delete existing asset
-          curl -X DELETE \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/assets/$ASSET_ID"
-        fi
-
-    - name: Get Release URL
-      if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'false'
-      id: get_release_url
-      run: |
-        RELEASE_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.get_version.outputs.VERSION }}" \
-          | jq -r .id)
-        
-        UPLOAD_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" \
-          | jq -r .upload_url)
-        
-        echo "UPLOAD_URL=$UPLOAD_URL" >> $GITHUB_OUTPUT
-
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url || steps.get_release_url.outputs.UPLOAD_URL }}
-        asset_path: ./${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux.tar.gz
-        asset_name: ${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux.tar.gz
-        asset_content_type: application/gzip
+  release:
+    uses: ./.github/workflows/rust-release.yml
+    with:
+      version: ${{ github.event.inputs.version }}
+      pkg_name: project-cleaner
+      additional_files: clean.config.json
 
   deploy_aur:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - name: Update PKGBUILD
-      run: |
-        version="${{ needs.build.outputs.version }}"
-        rel="${{ github.event.inputs.rel || '1' }}"
-        echo "Updating PKGBUILD to version $version-$rel"
-        
-        # Update version and release in PKGBUILD
-        sed -i "s/pkgver=.*/pkgver=${version#v}/" template/${{ env.PKG_NAME }}/PKGBUILD
-        sed -i "s/pkgrel=.*/pkgrel=$rel/" template/${{ env.PKG_NAME }}/PKGBUILD
-        
-        # Construct download URL
-        download_url="https://github.com/${{ github.repository }}/releases/download/$version/${{ env.PKG_NAME }}-$version-x86_64-linux.tar.gz"
-        echo "Download URL: $download_url"
-        
-        # Update source in PKGBUILD
-        sed -i "s|source=.*|source=(\"$download_url\")|" template/${{ env.PKG_NAME }}/PKGBUILD
-        
-        # Calculate SHA256 sum
-        echo "Downloading asset for SHA256 calculation"
-        sha256sum=$(curl -sL "$download_url" | sha256sum | cut -d ' ' -f 1)
-        echo "SHA256: $sha256sum"
-        
-        # Update SHA256 sum in PKGBUILD
-        sed -i "s/sha256sums=.*/sha256sums=('$sha256sum')/" template/${{ env.PKG_NAME }}/PKGBUILD
+    needs: release
+    uses: ./.github/workflows/aur-deploy.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+      pkg_name: project-cleaner
+      rel: ${{ github.event.inputs.rel || '1' }}
+      template_path: template
+    secrets:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
+      AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
 
-        echo "Content of PKGBUILD:"
-        cat template/${{ env.PKG_NAME }}/PKGBUILD
-        echo "::debug::This is the content of the PKGBUILD file after updates"
-
-    - name: Publish AUR package
-      uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
-      with:
-        pkgname: ${{ env.PKG_NAME }}
-        pkgbuild: ./template/${{ env.PKG_NAME }}/PKGBUILD
-        commit_username: ${{ secrets.AUR_USERNAME }}
-        commit_email: ${{ secrets.AUR_EMAIL }}
-        ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        commit_message: "Update to version ${GITHUB_REF#refs/tags/}"
-        ssh_keyscan_types: rsa,ecdsa,ed25519

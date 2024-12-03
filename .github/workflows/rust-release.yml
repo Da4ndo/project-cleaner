@@ -1,0 +1,104 @@
+name: Build and Release Rust Application
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g. v1.0.0)'
+        required: false
+        type: string
+      pkg_name:
+        description: 'Package name'
+        required: true
+        type: string
+      additional_files:
+        description: 'Comma-separated list of additional files to include in release'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      version:
+        description: "The version that was released"
+        value: ${{ jobs.build.outputs.version }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        
+    - name: Build
+      run: cargo build --release
+      
+    - name: Get version
+      id: get_version
+      run: |
+        if [ -n "${{ inputs.version }}" ]; then
+          echo "VERSION=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          echo "CREATE_NEW_RELEASE=true" >> $GITHUB_OUTPUT
+        else
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LATEST_TAG" ]; then
+            echo "❌ No tags found" >&2
+            exit 1
+          fi
+          echo "VERSION=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "CREATE_NEW_RELEASE=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Build Release Archive
+      id: archive
+      run: |
+        RELEASE_DIR="${{ inputs.pkg_name }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux"
+        mkdir $RELEASE_DIR
+        cp target/release/${{ inputs.pkg_name }} $RELEASE_DIR/
+        
+        # Copy additional files if specified
+        if [ -n "${{ inputs.additional_files }}" ]; then
+          IFS=',' read -ra FILES <<< "${{ inputs.additional_files }}"
+          for file in "${FILES[@]}"; do
+            cp $file $RELEASE_DIR/
+            echo "📦 Added $file to release archive"
+          done
+        fi
+        
+        tar -czvf $RELEASE_DIR.tar.gz $RELEASE_DIR
+        echo "ARCHIVE_NAME=$RELEASE_DIR.tar.gz" >> $GITHUB_OUTPUT
+        echo "✅ Created release archive: $RELEASE_DIR.tar.gz"
+
+    - name: Get README Content
+      id: get_readme
+      run: |
+        delimiter="README_EOF_$(date +%s)"
+        {
+          echo "README_CONTENT<<$delimiter"
+          echo "$(cat README.md)"
+          echo "$delimiter"
+        } >> $GITHUB_OUTPUT
+
+    - name: Create or Update Release
+      id: release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.get_version.outputs.VERSION }}
+        name: "${{ inputs.pkg_name }} - ${{ steps.get_version.outputs.VERSION }}"
+        body: ${{ steps.get_readme.outputs.README_CONTENT }}
+        files: ${{ steps.archive.outputs.ARCHIVE_NAME }}
+        token: ${{ github.token }}
+
+    - name: Post Release Information
+      run: |
+        echo "🚀 Release Details:"
+        echo "  • Version: ${{ steps.get_version.outputs.VERSION }}"
+        echo "  • Archive: ${{ steps.archive.outputs.ARCHIVE_NAME }}"
+        echo "  • Download URL: https://github.com/${{ github.repository }}/releases/download/${{ steps.get_version.outputs.VERSION }}/${{ steps.archive.outputs.ARCHIVE_NAME }}"
