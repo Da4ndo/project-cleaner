@@ -3,6 +3,15 @@ name: Deploy to AUR and GitHub Release
 on:
   release:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g. v1.0.0)'
+        required: true
+      rel:
+        description: 'Release number (e.g. 1)'
+        required: true
+        default: '1'
 
 env:
   CARGO_TERM_COLOR: always
@@ -11,6 +20,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}
     steps:
     - uses: actions/checkout@v3
     - name: Install Rust
@@ -18,11 +29,19 @@ jobs:
       with:
         profile: minimal
         toolchain: stable
+        
     - name: Build
       run: cargo build --release
+      
     - name: Get version
       id: get_version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+        
     - name: Create Release Archive
       run: |
         RELEASE_DIR="${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux"
@@ -30,12 +49,25 @@ jobs:
         cp target/release/${{ env.PKG_NAME }} $RELEASE_DIR/
         cp clean.config.json $RELEASE_DIR/
         tar -czvf $RELEASE_DIR.tar.gz $RELEASE_DIR
+
+    - name: Create Release
+      if: github.event_name == 'workflow_dispatch'
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.event.inputs.version }}
+        release_name: ${{ github.event.inputs.version }}
+        draft: false
+        prerelease: false
+        
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ github.event.release.upload_url }}
+        upload_url: ${{ github.event.release.upload_url || steps.create_release.outputs.upload_url }}
         asset_path: ./${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux.tar.gz
         asset_name: ${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux.tar.gz
         asset_content_type: application/gzip
@@ -47,11 +79,13 @@ jobs:
     - uses: actions/checkout@v3
     - name: Update PKGBUILD
       run: |
-        version="${GITHUB_REF#refs/tags/}"
-        echo "Updating PKGBUILD to version $version"
+        version="${{ needs.build.outputs.version }}"
+        rel="${{ github.event.inputs.rel || '1' }}"
+        echo "Updating PKGBUILD to version $version-$rel"
         
-        # Update version in PKGBUILD
+        # Update version and release in PKGBUILD
         sed -i "s/pkgver=.*/pkgver=${version#v}/" template/${{ env.PKG_NAME }}/PKGBUILD
+        sed -i "s/pkgrel=.*/pkgrel=$rel/" template/${{ env.PKG_NAME }}/PKGBUILD
         
         # Construct download URL
         download_url="https://github.com/${{ github.repository }}/releases/download/$version/${{ env.PKG_NAME }}-$version-x86_64-linux.tar.gz"
