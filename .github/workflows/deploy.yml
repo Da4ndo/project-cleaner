@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to deploy (e.g. v1.0.0)'
-        required: true
+        description: 'Version to deploy (e.g. v1.0.0). Leave empty to update existing release'
+        required: false
       rel:
         description: 'Release number (e.g. 1)'
         required: true
@@ -37,12 +37,21 @@ jobs:
       id: get_version
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "CREATE_NEW_RELEASE=true" >> $GITHUB_OUTPUT
+          else
+            # Get the latest release version when only updating rel
+            LATEST_TAG=$(git describe --tags --abbrev=0)
+            echo "VERSION=$LATEST_TAG" >> $GITHUB_OUTPUT
+            echo "CREATE_NEW_RELEASE=false" >> $GITHUB_OUTPUT
+          fi
         else
           echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "CREATE_NEW_RELEASE=true" >> $GITHUB_OUTPUT
         fi
         
-    - name: Create Release Archive
+    - name: Build Release Archive
       run: |
         RELEASE_DIR="${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux"
         mkdir $RELEASE_DIR
@@ -59,7 +68,7 @@ jobs:
         echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Create Release
-      if: github.event_name == 'workflow_dispatch'
+      if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'true'
       id: create_release
       uses: actions/create-release@v1
       env:
@@ -71,6 +80,38 @@ jobs:
         draft: false
         prerelease: false
         
+    - name: Update Existing Release
+      if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'false'
+      run: |
+        RELEASE_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.get_version.outputs.VERSION }}" \
+          | jq -r .id)
+        
+        curl -X PATCH \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" \
+          -d "{\"body\": $(jq -R -s '.' <<< "${{ steps.get_readme.outputs.README_CONTENT }}")}"
+
+    - name: Delete Existing Asset
+      if: github.event_name == 'workflow_dispatch' && steps.get_version.outputs.CREATE_NEW_RELEASE == 'false'
+      run: |
+        RELEASE_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.get_version.outputs.VERSION }}" \
+          | jq -r .id)
+        
+        # Get asset ID
+        ASSET_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets" \
+          | jq -r ".[] | select(.name == \"${{ env.PKG_NAME }}-${{ steps.get_version.outputs.VERSION }}-x86_64-linux.tar.gz\").id")
+        
+        if [ ! -z "$ASSET_ID" ]; then
+          # Delete existing asset
+          curl -X DELETE \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/assets/$ASSET_ID"
+        fi
+
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
