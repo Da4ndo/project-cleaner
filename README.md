@@ -65,6 +65,19 @@ yay -S project-cleaner
 
 #### 🐧 Debian/Ubuntu
 
+For Debian/Ubuntu systems, download the latest release package and install manually:
+
+1. Download the latest release from [GitHub Releases](https://github.com/Da4ndo/project-cleaner/releases/latest)
+2. Extract the downloaded package, navigate to the directory, and install:
+```bash
+cp project-cleaner /usr/bin/project-cleaner
+mkdir -p /etc/project-cleaner
+cp clean.config.json /etc/project-cleaner/clean.config.json
+```
+
+
+#### 🔨 Build from Source
+
 You can install ProjectCleaner by running the following command: 
 ```bash
 git clone https://github.com/Da4ndo/project-cleaner
@@ -72,8 +85,7 @@ cd project-cleaner
 
 cargo build --release
 
-cp target/release/project-cleaner /usr/bin/project-cleaner
-
+cp target/release/project-cleaner /usr/bin/project-cleane
 mkdir -p /etc/project-cleaner
 cp clean.config.json /etc/project-cleaner/clean.config.json
 ```
